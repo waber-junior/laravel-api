@@ -25,18 +25,19 @@ class AuthController extends Controller
      */
     public function register(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            "name" => "required|min:3",
-            "password" => "required|min:8",
-            "email" => "required|unique:users|email"
-        ]);
-
-        if ($validator->fails()){
-            return $this->errors("Não foi possível cadastrar o usuário", 400, $validator->errors()->all());
-        }
-
-        $data = $request->all();
         try {
+            $validator = Validator::make($request->all(), [
+                "name" => "required|min:3",
+                "password" => "required|min:8",
+                "email" => "required|unique:users|email"
+            ]);
+
+            if ($validator->fails()){
+                return $this->errors("Não foi possível cadastrar o usuário", 400, $validator->errors()->all());
+            }
+
+            $data = $request->all();
+
             $user = User::create([
                 "name" => $data["name"],
                 "password" => bcrypt($data["password"]),
@@ -55,42 +56,50 @@ class AuthController extends Controller
      */
     public function login(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            "email" => "required",
-            "password" => "required",
-        ]);
-
-        if ($validator->fails()){
-            return $this->errors("Não foi possível fazer login", 400, $validator->errors()->all());
-        }
-
-        $data = $request->all();
-        if (Auth::attempt($data)){
-            $user = Auth::user();
-
-            return $this->success("Usuário autenticado com sucesso", [
-                "token" => $user->createToken("tokenAcesso")->accessToken,
-                "user" => $user
+        try {
+            $validator = Validator::make($request->all(), [
+                "email" => "required",
+                "password" => "required",
             ]);
-        }
 
-        return $this->errors(
-            "Usuário e/ou senha inválidos",
-             401
-        );
+            if ($validator->fails()){
+                return $this->errors("Não foi possível fazer login", 422, $validator->errors()->all());
+            }
+
+            $data = $request->all();
+
+            if (Auth::attempt($data)){
+                $user = Auth::user();
+
+                return $this->success("Usuário autenticado com sucesso", [
+                    "token" => $user->createToken("tokenAcesso")->accessToken
+                ]);
+            }
+
+            return $this->errors(
+                "Usuário e/ou senha inválidos",
+                401
+            );
+        }catch (\Exception $e){
+            return $this->errors(
+                "Não foi possível fazer login",
+                400,
+                $e->getMessage()
+            );
+        }
     }
 
-    public function forgotPassword(Request $request)
+    public function forgotPassword(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email'
-        ]);
-
-        if ($validator->fails()){
-            return $this->errors("Insira um email válido", 400, $validator->errors()->all(),);
-        }
-
         try {
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email'
+            ]);
+
+            if ($validator->fails()){
+                return $this->errors("Insira um email válido", 422, $validator->errors()->all(),);
+            }
+
             $status = Password::sendResetLink(
                 $request->only('email')
             );
@@ -103,19 +112,19 @@ class AuthController extends Controller
         }
     }
 
-    public function resetPasswordByToken(Request $request)
+    public function resetPasswordByToken(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'token' => 'required',
-            'email' => 'required|email',
-            'password' => 'required|min:8|confirmed'
-        ]);
-
-        if ($validator->fails()) {
-            return $this->errors("Desculpe, não foi possível resetar senha", 400, $validator->errors()->all());
-        }
-
         try {
+            $validator = Validator::make($request->all(), [
+                'token' => 'required',
+                'email' => 'required|email',
+                'password' => 'required|min:8|confirmed'
+            ]);
+
+            if ($validator->fails()) {
+                return $this->errors("Desculpe, não foi possível resetar senha", 422, $validator->errors()->all());
+            }
+
             $status = Password::reset(
                 $request->only('email', 'password', 'password_confirmation', 'token'),
                 function ($user, $password) {
@@ -142,8 +151,12 @@ class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
-        $token = Auth::guard('api')->user()->token();
-        $token->revoke();
-        return $this->success("Usuário deslogado com sucesso");
+        try {
+            $token = Auth::guard('api')->user()->token();
+            $token->revoke();
+            return $this->success("Usuário deslogado com sucesso");
+        }catch (\Exception $e){
+            return $this->errors("Não foi possível fazer logout", 400, $e->getMessage());
+        }
     }
 }
